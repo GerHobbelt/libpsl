@@ -41,6 +41,11 @@
 #include <string.h>
 #ifdef HAVE_ALLOCA_H
 #	include <alloca.h>
+#elif defined(_MSC_VER)
+#	include <malloc.h>
+#ifndef alloca
+#define alloca(size)    _alloca(size)
+#endif
 #endif
 
 #include <libpsl.h>
@@ -111,7 +116,13 @@ static void test_psl(void)
 	psl_free(psl);
 }
 
-int main(int argc, const char * const *argv)
+
+
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      psl_test_cookie_domain_main(cnt, arr)
+#endif
+
+int main(int argc, const char** argv)
 {
 #ifdef _WIN32
 	WSADATA wsa_data;
