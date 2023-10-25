@@ -100,6 +100,9 @@ config.set('HAVE_STRNDUP', cc.has_function('strndup'))
 config.set('HAVE_CLOCK_GETTIME', cc.has_function('clock_gettime'))
 config.set('HAVE_FMEMOPEN', cc.has_function('fmemopen'))
 config.set('HAVE_NL_LANGINFO', cc.has_function('nl_langinfo'))
+if cc.has_function_attribute('visibility')
+  config.set('HAVE_VISIBILITY', 1)
+endif
 configure_file(output : 'config.h', configuration : config)
 
 configinc = include_directories('.')
@@ -132,6 +135,8 @@ endif
 subdir('include')
 subdir('src')
 subdir('tools')
-subdir('tests')
-subdir('fuzz')
+if get_option('tests')
+  subdir('tests')
+  subdir('fuzz')
+endif
 subdir(join_paths('docs', 'libpsl'))
