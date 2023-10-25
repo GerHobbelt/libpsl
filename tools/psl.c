@@ -38,6 +38,14 @@
 
 #ifdef _WIN32
 # include <winsock2.h> // WSAStartup, WSACleanup
+
+// Windows does not have localtime_r but has localtime_s, which is more or less
+// the same except that the arguments are reversed
+# define LOCALTIME_R_SUCCESSFUL(t_sec,t_now)	\
+	(localtime_s(t_now, t_sec) == 0)
+#else
+# define LOCALTIME_R_SUCCESSFUL(t_sec,t_now)	\
+	(localtime_r(t_sec, t_now) != NULL)
 #endif
 
 #include <stdlib.h>
@@ -90,7 +98,7 @@ static const char *time2str(time_t t)
 	static char buf[64];
 	struct tm tm;
 
-	if (localtime_r(&t, &tm) != NULL)
+	if (LOCALTIME_R_SUCCESSFUL(&t, &tm))
 		strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S %Z", &tm);
 	else
 		strcpy(buf, "--notime--");
