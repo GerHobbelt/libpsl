@@ -38,6 +38,11 @@
 #include <ctype.h>
 #ifdef HAVE_ALLOCA_H
 #	include <alloca.h>
+#elif defined(_MSC_VER)
+#	include <malloc.h>
+#ifndef alloca
+#define alloca(size)    _alloca(size)
+#endif
 #endif
 
 #include <libpsl.h>
