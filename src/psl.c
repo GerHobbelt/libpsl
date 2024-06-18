@@ -180,7 +180,7 @@ static const char _psl_filename[] = "";
 
 /* references to these PSLs will result in lookups to built-in data */
 static const psl_ctx_t
-	builtin_psl;
+builtin_psl = { 0 };
 
 #ifdef PSL_DISTFILE
 static const char _psl_dist_filename[] = PSL_DISTFILE;
