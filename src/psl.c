@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2014-2022 Tim Ruehsen
+ * Copyright(c) 2014-2024 Tim Ruehsen
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -105,7 +105,7 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #ifndef WINICONV_CONST
-#  define WINICONV_CONST
+#  define WINICONV_CONST ICONV_CONST
 #endif
 
 #include <libpsl.h>
