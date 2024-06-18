@@ -38,12 +38,6 @@
 #       define GCC_VERSION_AT_LEAST(major, minor) 0
 #endif
 
-#if GCC_VERSION_AT_LEAST(2,95)
-#  define PSL_UNUSED __attribute__ ((unused))
-#else
-#  define PSL_UNUSED
-#endif
-
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -64,9 +58,6 @@ typedef SSIZE_T ssize_t;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef HAVE_STRINGS_H
-# include <strings.h>
-#endif
 #include <ctype.h>
 #include <time.h>
 #include <errno.h>
@@ -78,12 +69,8 @@ typedef SSIZE_T ssize_t;
 
 #ifndef _WIN32
 # include <arpa/inet.h>
-#endif
-
-#ifdef HAVE_ALLOCA_H
-#	include <alloca.h>
-#elif defined _WIN32
-#	include <malloc.h>
+#else
+# include <malloc.h>
 #endif
 
 #ifdef WITH_LIBICU
@@ -674,17 +661,21 @@ static psl_idna_t *psl_idna_open(void)
 	return NULL;
 }
 
-static void psl_idna_close(psl_idna_t *idna PSL_UNUSED)
+static void psl_idna_close(psl_idna_t *idna)
 {
+	(void) idna;
+
 #if defined(WITH_LIBICU)
 	if (idna)
 		uidna_close((UIDNA *)idna);
 #endif
 }
 
-static int psl_idna_toASCII(psl_idna_t *idna PSL_UNUSED, const char *utf8, char **ascii)
+static int psl_idna_toASCII(psl_idna_t *idna, const char *utf8, char **ascii)
 {
 	int ret = -1;
+
+	(void) idna;
 
 #if defined(WITH_LIBICU)
 	/* IDNA2008 UTS#46 punycode conversion */
@@ -1694,6 +1685,16 @@ void psl_free_string(char *str)
 		free(str);
 }
 
+#if defined(WITH_LIBIDN2) || defined(WITH_LIBIDN)
+/* Avoid using strcasecmp() or _stricmp() */
+static int isUTF8(const char *s) {
+	return (s[0] == 'u' || s[0] == 'U')
+		&& (s[1] == 't' || s[1] == 'T')
+		&& (s[2] == 'f' || s[2] == 'F')
+		&& s[3] == '-' && s[4] == 0;
+}
+#endif
+
 /**
  * psl_str_to_utf8lower:
  * @str: string to convert
@@ -1719,9 +1720,12 @@ void psl_free_string(char *str)
  *
  * Since: 0.4
  */
-psl_error_t psl_str_to_utf8lower(const char *str, const char *encoding PSL_UNUSED, const char *locale PSL_UNUSED, char **lower)
+psl_error_t psl_str_to_utf8lower(const char *str, const char *encoding, const char *locale, char **lower)
 {
 	int ret = PSL_ERR_INVALID_ARG;
+
+	(void) encoding;
+	(void) locale;
 
 	if (!str)
 		return PSL_ERR_INVALID_ARG;
@@ -1745,23 +1749,31 @@ psl_error_t psl_str_to_utf8lower(const char *str, const char *encoding PSL_UNUSE
 	}
 
 #ifdef WITH_LIBICU
+#define STACK_STRLENGTH 256
 	do {
-	size_t str_length = strlen(str);
 	UErrorCode status = 0;
 	UChar *utf16_dst, *utf16_lower;
-	int32_t utf16_dst_length;
 	char *utf8_lower;
+	int32_t utf16_dst_length, utf16_dst_size, utf16_lower_size, utf8_lower_size;
 	UConverter *uconv;
+	UChar utf16_dst_buf[STACK_STRLENGTH * 2 + 1];
+	UChar utf16_lower_buf[STACK_STRLENGTH * 2 + 1];
+	char utf8_lower_buf[STACK_STRLENGTH * 6 + 1];
+	size_t str_length = strlen(str);
 
-	if (str_length < 256) {
-		/* C89 allocation */
-		utf16_dst   = alloca(sizeof(UChar) * (str_length * 2 + 1));
-		utf16_lower = alloca(sizeof(UChar) * (str_length * 2 + 1));
-		utf8_lower  = alloca(str_length * 6 + 1);
+	if (str_length <= STACK_STRLENGTH) {
+		utf16_dst_size = countof(utf16_dst_buf);
+		utf16_lower_size = countof(utf16_lower_buf);
+		utf8_lower_size = countof(utf8_lower_buf);
+		utf16_dst   = utf16_dst_buf;
+		utf16_lower = utf16_lower_buf;
+		utf8_lower  = utf8_lower_buf;
 	} else {
-		utf16_dst   = malloc(sizeof(UChar) * (str_length * 2 + 1));
-		utf16_lower = malloc(sizeof(UChar) * (str_length * 2 + 1));
-		utf8_lower  = malloc(str_length * 6 + 1);
+		utf16_dst_size = utf16_lower_size = str_length * 2 + 1;
+		utf8_lower_size = str_length * 6 + 1;
+		utf16_dst   = malloc(sizeof(UChar) * utf16_dst_size);
+		utf16_lower = malloc(sizeof(UChar) * utf16_lower_size);
+		utf8_lower  = malloc(sizeof(char) * utf8_lower_size);
 
 		if (!utf16_dst || !utf16_lower || !utf8_lower) {
 			ret = PSL_ERR_NO_MEM;
@@ -1771,13 +1783,13 @@ psl_error_t psl_str_to_utf8lower(const char *str, const char *encoding PSL_UNUSE
 
 	uconv = ucnv_open(encoding, &status);
 	if (U_SUCCESS(status)) {
-		utf16_dst_length = ucnv_toUChars(uconv, utf16_dst, str_length * 2 + 1, str, str_length, &status);
+		utf16_dst_length = ucnv_toUChars(uconv, utf16_dst, utf16_dst_size, str, str_length, &status);
 		ucnv_close(uconv);
 
 		if (U_SUCCESS(status)) {
-			int32_t utf16_lower_length = u_strToLower(utf16_lower, str_length * 2 + 1, utf16_dst, utf16_dst_length, locale, &status);
+			int32_t utf16_lower_length = u_strToLower(utf16_lower, utf16_lower_size, utf16_dst, utf16_dst_length, locale, &status);
 			if (U_SUCCESS(status)) {
-				u_strToUTF8(utf8_lower, str_length * 6 + 1, NULL, utf16_lower, utf16_lower_length, &status);
+				u_strToUTF8(utf8_lower, utf8_lower_size, NULL, utf16_lower, utf16_lower_length, &status);
 				if (U_SUCCESS(status)) {
 					ret = PSL_SUCCESS;
 					if (lower) {
@@ -1805,11 +1817,13 @@ psl_error_t psl_str_to_utf8lower(const char *str, const char *encoding PSL_UNUSE
 		/* fprintf(stderr, "Failed to open converter for '%s' (status %d)\n", encoding, status); */
 	}
 out:
-	if (str_length >= 256) {
+	if (utf16_dst != utf16_dst_buf)
 		free(utf16_dst);
+	if (utf16_lower != utf16_lower_buf)
 		free(utf16_lower);
+	if (utf8_lower != utf8_lower_buf)
 		free(utf8_lower);
-	}
+
 	} while (0);
 #elif defined(WITH_LIBIDN2) || defined(WITH_LIBIDN)
 	do {
@@ -1827,7 +1841,7 @@ out:
 		}
 
 		/* convert to UTF-8 */
-		if (strcasecmp(encoding, "utf-8")) {
+		if (!isUTF8(encoding)) {
 			iconv_t cd = iconv_open("utf-8", encoding);
 
 			if (cd != (iconv_t)-1) {
