@@ -37,7 +37,7 @@
 #include <string.h>
 #ifdef HAVE_ALLOCA_H
 #	include <alloca.h>
-#elif defined(_MSC_VER)
+#elif defined _WIN32
 #	include <malloc.h>
 #ifndef alloca
 #define alloca(size)    _alloca(size)
